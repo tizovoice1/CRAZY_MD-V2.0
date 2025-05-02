@@ -126,8 +126,63 @@ const {  state, saveCreds } =await useMultiFileAuthState(`./session`)
             return decode.user && decode.server && decode.user + '@' + decode.server || jid
         } else return jid
     }
+    
+    //ANTILINK CODE
+    XeonBotInc.ev.on('messages.upsert', async (chatUpdate) => {
+    try {
+        const mek = chatUpdate.messages[0];
+        if (!mek.message || !mek.key.remoteJid.endsWith('@g.us')) return;
 
-    XeonBotInc.ev.on('contacts.update', update => {
+        const m = mek;
+        const groupMetadata = await XeonBotInc.groupMetadata(m.chat);
+        const participants = groupMetadata.participants;
+        const sender = m.key.participant || m.key.remoteJid;
+        const isAdmin = participants.some(p => p.id === sender && p.admin);
+        const isBotAdmin = participants.some(p => p.id === XeonBotInc.user.id && p.admin);
+
+        // Initialisation de la configuration du groupe
+        if (!db.data.chats[m.chat]) db.data.chats[m.chat] = { antilink: global.defaultAntiLink };
+        const chat = db.data.chats[m.chat];
+        if (chat.antilink && !isAdmin && isBotAdmin) {
+            const messageText = m.message.conversation || m.message.extendedTextMessage?.text || '';
+            const linkRegex = /(https?:\/\/[^\s]+)/gi;
+            if (linkRegex.test(messageText)) {
+                await XeonBotInc.sendMessage(m.chat, { delete: m.key });
+                await XeonBotInc.sendMessage(m.chat, {
+                    text: `━━❪⚠️𝐋𝐈𝐍𝐊-𝐃𝐄𝐓𝐄𝐂𝐓𝐄𝐃⚠️❫━━\n\n_hey_ ✋❌ @${sender.split('@')[0]},\n> *𝘭𝘪𝘯𝘬 𝘪𝘴 𝘯𝘰𝘵 𝘢𝘭𝘭𝘰𝘸𝘦𝘥 𝘩𝘦𝘳𝘦 𝘺𝘰𝘶 𝘣𝘦 𝘸𝘢𝘳𝘯𝘦𝘥*. ⚠️\n\n© ᴘᴏᴡᴇʀᴇᴅ ʙʏ ᴄʀᴀᴢʏ ᴛᴇᴄʜ`,
+                    mentions: [sender]
+                });
+            }
+        }
+    } catch (err) {
+        console.error('Erreur dans la détection des liens :', err);
+    }
+});
+
+    XeonBotInc.ev.on('messages.upsert', async (chatUpdate) => {
+    try {
+        const mek = chatUpdate.messages[0];
+        if (!mek.message) return;
+
+        const from = mek.key.remoteJid;
+
+        // Auto-react aux statuts si activé
+        if (from.endsWith('@status') && global.autoreactstatus) {
+            let randomEmoji = global.statusReactEmojis[Math.floor(Math.random() * global.statusReactEmojis.length)];
+            await XeonBotInc.sendMessage(from, {
+                react: {
+                    text: randomEmoji,
+                    key: mek.key
+                }
+            });
+        }
+
+    } catch (err) {
+        console.error('Erreur dans autoreact status:', err);
+    }
+});
+
+XeonBotInc.ev.on('contacts.update', update => {
         for (let contact of update) {
             let id = XeonBotInc.decodeJid(contact.id)
             if (store && store.contacts) store.contacts[id] = {
